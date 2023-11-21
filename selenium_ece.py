@@ -3,7 +3,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.common.action_chains import ActionChains
 import csv
 import time
 
@@ -30,50 +31,62 @@ search_input = driver.find_element(By.CSS_SELECTOR, 'input.gsc-input')
 search_input.send_keys('artificial intelligence')
 search_input.send_keys(Keys.ENTER)
 
-# Wait for search results to load
-wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.gs-title a.gs-title')))
-
-''' bug from here on'''
-# Extract all relevant links
-links = driver.find_elements(By.CSS_SELECTOR, 'div.gs-title a.gs-title')
-google_redirect_links = [link.get_attribute('href') for link in links if link.get_attribute('href') and 'areas-of-study' in link.get_attribute('href')]
-
-# Function to parse Google redirect URLs and extract the actual URL
-def extract_actual_url(google_url):
-    from urllib.parse import urlparse, parse_qs
-    parsed_url = urlparse(google_url)
-    query_params = parse_qs(parsed_url.query)
-    actual_url = query_params.get('q', [None])[0]
-    return actual_url
-
-# Process each Google redirect URL to get the actual URLs
-actual_urls = [extract_actual_url(url) for url in google_redirect_links if url]
-
-'''to here '''
-
 # Data to be saved in CSV
 data_to_save = []
 
-# Iterate through each actual URL and extract required information
-for url in actual_urls:
-    # Navigate to the URL
-    driver.get(url)
+current_page = 1
+max_pages = 5  # You can adjust this to the number of pages you want to process
 
-    # Wait for the required element to load and extract the content
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'h1.hero__heading')))
-    h1_content = driver.find_element(By.CSS_SELECTOR, 'h1.hero__heading').text
-    page_url = driver.current_url
+while current_page <= max_pages:
+    # Wait for search results to load
+    wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.gs-title a.gs-title')))
 
-    # Add the extracted data to the list
-    data_to_save.append([h1_content, page_url])
-    
-    # Small delay to avoid rapid-fire requests
-    time.sleep(1)
+    # Extract all relevant links
+    links = driver.find_elements(By.CSS_SELECTOR, 'div.gs-title a.gs-title')
+    google_redirect_links = set(link.get_attribute('href')
+                                for link in links
+                                if link.get_attribute('href') and 'areas-of-study' in link.get_attribute('href'))
 
-# ... [rest of the code for saving data and closing the driver] ...
+    for url in google_redirect_links:
+        try:
+            # Navigate to the URL
+            driver.get(url)
 
-# Close the driver
-driver.quit()
+            # Wait for the required element to load and extract the content
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'h1.hero__heading')))
+            h1_content = driver.find_element(By.CSS_SELECTOR, 'h1.hero__heading').text
+            page_url = driver.current_url
+
+            # Add the extracted data to the list
+            data_to_save.append([h1_content, page_url])
+        except TimeoutException:
+            print(f"Element 'h1.hero__heading' not found on {url}. Continuing to next URL.")
+        except Exception as e:
+            print(f"An error occurred while processing {url}: {e}. Continuing to next URL.")
+        finally:
+            # Small delay to avoid rapid-fire requests
+            time.sleep(1)
+
+        '''still troubleshooting how to navigate the next page'''
+    try:
+        # Wait for the pagination bar to be fully loaded
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.gsc-cursor-box')))
+        pagination_elements = driver.find_elements(By.CSS_SELECTOR, "div.gsc-cursor-page")
+
+        if current_page < len(pagination_elements):
+            # Use JavaScript to click on the next page element
+            next_page_element = pagination_elements[current_page]  # next page is current_page index in list
+            driver.execute_script("arguments[0].click();", next_page_element)
+
+            current_page += 1
+            print(f"Moving to page {current_page}")
+            time.sleep(2)  # Wait for the next page to load
+        else:
+            print("No more pages or reached the maximum page limit.")
+            break
+    except NoSuchElementException:
+        print("Failed to find the next page element.")
+        break
 
 # Write data to CSV file
 with open('extracted_ece_data.csv', 'w', newline='', encoding='utf-8') as file:
@@ -81,3 +94,6 @@ with open('extracted_ece_data.csv', 'w', newline='', encoding='utf-8') as file:
     writer.writerow(['H1 Content', 'URL'])  # CSV Headers
     for row in data_to_save:
         writer.writerow(row)
+
+# Close the driver
+driver.quit()
