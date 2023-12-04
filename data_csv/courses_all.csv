@@ -14,7 +14,7 @@ BMI 510,Biostatistics for Machine Learning,Instructor:J. McKay
 BMI 534,Introduction to Machine Learning,Instructor:H. Kwon
 CS 323,Machine Learning Applications,Instructor:N. Thakur
 CS 334,Machine Learning,Instructor:J. Ho
-CS 534,Machine Learning,Instructor:H. Kwon
+CS 534,Machine Learning,N/A
 DATA 534,Applied Machine Learning,Instructor:M. Lau
 ISOM 676,Machine Learning & AI at Scale,N/A
 QTM 447,Statistical Machine Learning 2,Instructor:K. McAlister
@@ -32,3 +32,4 @@ ISOM 554,Data Science for Business,Instructor:E. Zhang
 QTM 521,Applied II,Instructor:Glynn/Sutherland
 QTM 531,Computing II,Instructor:A. Sanchez Becerra
 CS 485,Topics in Computer Science: Text Processing with Neural Networks,Instructor:F. Liu
+CS 584,Topics In Computer Science: TextProcessing Neural Networks,Instructor:F. Liu

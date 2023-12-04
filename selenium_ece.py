@@ -6,6 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 import csv
 import time
+import os
 
 def process_url(url, driver, wait):
     try:
@@ -35,94 +36,58 @@ def perform_search(query, driver, wait):
     except Exception as e:
         print(f"Unexpected error during search: {e}")
 
-# Set Chrome options for incognito mode
+
+# Initialize WebDriver
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument("--incognito")
-
-# Initialize the Chrome driver with the options
 driver = webdriver.Chrome(options=chrome_options)
 wait = WebDriverWait(driver, 10)
 
-# Data to be saved in CSV
 data_to_save = []
 current_page = 1
-max_pages = 5
-
-'''
-while current_page <= max_pages:
-    perform_search('artificial intelligence', driver, wait)  # Corrected function call
-    if current_page > 1:
-        pagination_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.gsc-cursor-page")))
-        # Get the specific pagination element for the current page
-        pagination_element = pagination_elements[current_page - 1]
-
-        # Scroll into view of the pagination element and then click using JavaScript
-        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_element)
-        driver.execute_script("arguments[0].click();", pagination_element)
-
-        # Wait for the page to load after pagination click
-        # (You might need to adjust the wait condition based on the specific behavior of the site)
-        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.gs-title a.gs-title')))
+max_pages = 3
 
 
-    # Fetch search result links
+def get_search_results():
     wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.gs-title a.gs-title')))
     links = driver.find_elements(By.CSS_SELECTOR, 'div.gs-title a.gs-title')
-    google_redirect_links = set(link.get_attribute('href') for link in links if link.get_attribute('href') and 'areas-of-study' in link.get_attribute('href'))
+    return set(link.get_attribute('href') for link in links if link.get_attribute('href') and 'areas-of-study' in link.get_attribute('href'))
+
+perform_search('artificial intelligence', driver, wait)  # Perform initial search
+
+while current_page <= max_pages:
+    google_redirect_links = get_search_results()
 
     for url in google_redirect_links:
         data = process_url(url, driver, wait)
         if data:
             data_to_save.append(data)
+
+    # Return to search results page for pagination
+    if current_page < max_pages:
+        perform_search('artificial intelligence', driver, wait)  # Reload the search page
+        pagination_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.gsc-cursor-page")))
+        try:
+            pagination_element = pagination_elements[current_page]
+            driver.execute_script("arguments[0].scrollIntoView(true);", pagination_element)
+            driver.execute_script("arguments[0].click();", pagination_element)
+            time.sleep(2) 
+        except (TimeoutException, NoSuchElementException, StaleElementReferenceException) as e:
+            print(f"Error during pagination: {e}")
 
     current_page += 1
 
-'''
 
-# Perform the initial search
-perform_search('artificial intelligence', driver, wait)
+script_directory = os.path.dirname(os.path.realpath(__file__))
+data_csv_directory = os.path.join(script_directory, "data_csv")
+if not os.path.exists(data_csv_directory):
+    os.makedirs(data_csv_directory)
+csv_file_path = os.path.join(data_csv_directory, 'extracted_ece_data.csv')
 
-while current_page <= max_pages:
-    # Wait for and fetch search result links
-    wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.gs-title a.gs-title')))
-    links = driver.find_elements(By.CSS_SELECTOR, 'div.gs-title a.gs-title')
-    google_redirect_links = set(link.get_attribute('href') for link in links if link.get_attribute('href') and 'areas-of-study' in link.get_attribute('href'))
-
-    for url in google_redirect_links:
-        data = process_url(url, driver, wait)
-        if data:
-            data_to_save.append(data)
-
-    # Handle pagination
-    if current_page < max_pages:
-        try:
-            pagination_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.gsc-cursor-page")))
-            if current_page < len(pagination_elements):
-                next_page_element = pagination_elements[current_page]  # Index for next page
-                next_page_element.click()
-                current_page += 1
-                print(f"Moved to page {current_page}")
-                time.sleep(2)  # Adjust as needed
-            else:
-                print("No more pages or reached the maximum page limit.")
-                break
-        except TimeoutException: # it kept giving me time out exception, what to do with turning pages?? 
-            print(f"Timeout occurred on page {current_page}.")
-            break
-        except Exception as e:
-            print(f"An unexpected error occurred on pagination: {e}")
-            break
-    else:
-        break
-
-
-
-# Write data to CSV file
-with open('extracted_ece_data.csv', 'w', newline='', encoding='utf-8') as file:
+with open(csv_file_path, 'w', newline='', encoding='utf-8') as file:
     writer = csv.writer(file)
     writer.writerow(['H1 Content', 'URL'])
     for row in data_to_save:
         writer.writerow(row)
 
-# Close the driver
 driver.quit()

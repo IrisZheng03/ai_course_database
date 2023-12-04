@@ -5,35 +5,30 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import csv
+import os
 
-# Search keywords
 search_keywords = ["artificial intelligence", "machine learning", "neural networks", "data science"]
 
 # Initialize the Chrome driver
-driver = webdriver.Chrome()
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument("--incognito")
+driver = webdriver.Chrome(options=chrome_options)
+wait = WebDriverWait(driver, 10)
 driver.get('https://atlas.emory.edu/')
 
-# Create a dictionary to hold course details and avoid duplicates
 unique_courses = {}
 
 for keyword in search_keywords:
-    # Wait for the search box to be clickable
     wait = WebDriverWait(driver, 10)
     element = wait.until(EC.element_to_be_clickable((By.ID, "crit-keyword")))
-
-    # Clear the search box, enter the keyword and submit
     element.clear()
     element.click()
     element.send_keys(keyword)
     element.send_keys(Keys.ENTER)
 
-    # Wait for the results to load
     wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'result--group-start')))
 
-    # Extract the page source
     html_content = driver.page_source
-
-    # Parse with BeautifulSoup
     soup = BeautifulSoup(html_content, 'html.parser')
     divs = soup.find_all('div', class_='result result--group-start')
 
@@ -42,6 +37,7 @@ for keyword in search_keywords:
         course_title = div.find('span', class_='result__title').get_text(strip=True) if div.find('span', class_='result__title') else 'N/A'
         instructor = div.find('span', class_='result__flex--9').get_text(strip=True) if div.find('span', class_='result__flex--9') else 'N/A'
 
+        # this part may need modification each year (all elective courses will be extracted since they are different sections within same elective course)
         if course_code == 'MD 920' and course_title not in ['Translation: Elective: Artif.Intell/Machine Learning', 'Translation: Elective: Clinical Informatics']:
             continue
 
@@ -50,19 +46,10 @@ for keyword in search_keywords:
         if course_key not in unique_courses:
             unique_courses[course_key] = [course_code, course_title, instructor]
 
-# Save to CSV
-with open('courses_all.csv', 'w', newline='', encoding='utf-8') as file:
-    writer = csv.writer(file)
-    writer.writerow(['Course Code', 'Course Title', 'Instructor'])  # CSV Headers
-
-    for course in unique_courses.values():
-        writer.writerow(course)
-
-
 
 '''categorize into different files'''
 
-# Dictionaries for categorized courses
+# Dictionaries for categorized courses, change if needed
 medical_school_courses = {}
 graduate_school_courses = {}
 business_school_courses = {}
@@ -71,11 +58,11 @@ other_courses = {}
 
 # Function to get the numeric part of the course code
 def get_numeric_part(course_code):
-    parts = course_code.split()  # Split the course code into parts
+    parts = course_code.split() 
     for part in parts:
-        if part.isdigit():  # Check if the part is a number
+        if part.isdigit(): 
             return int(part)
-    return None  # Return None if no numeric part is found
+    return None 
 
 # Categorize courses
 for course_key, course_details in unique_courses.items():
@@ -99,20 +86,27 @@ for course_key, course_details in unique_courses.items():
         else:
             other_courses[course_key] = course_details
 
-# Function to write courses to CSV
+script_directory = os.path.dirname(os.path.realpath(__file__))
+
+data_csv_directory = os.path.join(script_directory, "data_csv")
+
+if not os.path.exists(data_csv_directory):
+    os.makedirs(data_csv_directory)
+
 def write_courses_to_csv(courses, file_name):
-    with open(file_name, 'w', newline='', encoding='utf-8') as file:
+    file_path = os.path.join(data_csv_directory, file_name)
+    with open(file_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(['Course Code', 'Course Title', 'Instructor'])  # CSV Headers
+        writer.writerow(['Course Code', 'Course Title', 'Instructor']) 
         for course in courses.values():
             writer.writerow(course)
 
-# Write categorized courses to separate CSV files
 write_courses_to_csv(medical_school_courses, 'medical_school_courses.csv')
 write_courses_to_csv(business_school_courses, 'business_school_courses.csv')
 write_courses_to_csv(law_school_courses, 'law_school_courses.csv')
 write_courses_to_csv(graduate_school_courses, 'graduate_school_courses.csv')
 write_courses_to_csv(other_courses, 'other_courses.csv')
 
-# Close the driver
+write_courses_to_csv(unique_courses, 'courses_all.csv')
+
 driver.quit()
